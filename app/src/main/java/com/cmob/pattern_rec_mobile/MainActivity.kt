@@ -1,6 +1,7 @@
 package com.cmob.pattern_rec_mobile
 
 import android.content.Context
+import android.graphics.Color
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -20,6 +21,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var mobileNetModel: MobileNetModel
     private val modelInputTensor =
         TensorBuffer.createFixedSize(intArrayOf(1, 1, MODEL_WINDOW, 3), DataType.FLOAT32)
+
+    // Calculated from the dataset:
+    private val mus = arrayOf(0.6628660249577367f, 7.2556261603547405f, 0.41107842498640323f)
+    private val sigmas = arrayOf(6.849043077510763f, 6.746213296062538f, 4.754117645813611f)
 
     private lateinit var sensorManager: SensorManager
     private var sensor: Sensor? = null
@@ -71,10 +76,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also {
             sensorManager.registerListener(
-                this,
-                it,
-                SensorManager.SENSOR_DELAY_NORMAL,
-                SensorManager.SENSOR_DELAY_NORMAL
+                this, it, 50000, 50000
             )
         }
     }
@@ -82,20 +84,31 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun runModel() {
         val accArray = FloatArray(3 * MODEL_WINDOW)
         accBuffer.forEachIndexed { i, sample ->
-            accArray[3 * i] = sample[0]
-            accArray[3 * i + 1] = sample[1]
-            accArray[3 * i + 2] = sample[2]
-        } // converts the queue into a flattened array of floats
+            accArray[3 * i] = (sample[0] - mus[0]) / sigmas[0]
+            accArray[3 * i + 1] = (sample[1] - mus[1]) / sigmas[1]
+            accArray[3 * i + 2] = (sample[2] - mus[2]) / sigmas[2]
+        } // converts the queue into a flattened array of floats normalizing the data
         modelInputTensor.loadArray(accArray)
         val ret = mobileNetModel.analyze(modelInputTensor)
+
+        // Shows the values:
+        var maxIndex = 0
+        var maxVal: Float = Float.MIN_VALUE
         mobileNetModel.labelsList.mapIndexed { i, label ->
-            textViews[i].text = ret.mapWithFloatValue[label].toString()
+            val prob = ret.mapWithFloatValue[label]
+            textViews[i].text = prob.toString()
+            textViews[i].setTextColor(Color.GRAY)
+            if (prob!! > maxVal) {
+                maxIndex = i
+                maxVal = prob
+            }
         }
+        textViews[maxIndex].setTextColor(Color.GREEN)
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER)
-            accBuffer.add(event.values)
+            accBuffer.add(event.values.clone())
         if (accBuffer.count() == MODEL_WINDOW) runModel()
     }
 
