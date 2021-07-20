@@ -6,10 +6,14 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import com.google.common.collect.EvictingQueue
 import org.tensorflow.lite.DataType
@@ -17,7 +21,7 @@ import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
 
-    private var MODEL_WINDOW: Int = 90
+    private val MODEL_WINDOW: Int = 90
     private lateinit var mobileNetModel: MobileNetModel
     private val modelInputTensor =
         TensorBuffer.createFixedSize(intArrayOf(1, 1, MODEL_WINDOW, 3), DataType.FLOAT32)
@@ -29,7 +33,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private var sensor: Sensor? = null
 
-    private var accBuffer: EvictingQueue<FloatArray> = EvictingQueue.create(90)
+    private val accBuffer: EvictingQueue<FloatArray> = EvictingQueue.create(MODEL_WINDOW)
+    private val STOP_FREQ_CHECK = 10
+    private var predictionsBuffer: EvictingQueue<Boolean> = EvictingQueue.create(STOP_FREQ_CHECK)
+
+    private val STOP_LOWER_THRESHOLD = 0.1
+    private val STOP_UPPER_THRESHOLD = 0.5
 
     private lateinit var downstairsTextView: TextView
     private lateinit var joggingTextView: TextView
@@ -37,7 +46,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var standingTextView: TextView
     private lateinit var upstairsTextView: TextView
     private lateinit var walkingTextView: TextView
+    private lateinit var titleTextView: TextView
     private lateinit var textViews: Array<TextView>
+
+    private lateinit var vibrator: Vibrator
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,6 +65,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         standingTextView = findViewById(R.id.standingTextView)
         upstairsTextView = findViewById(R.id.upstairsTextView)
         walkingTextView = findViewById(R.id.walkingTextView)
+        titleTextView = findViewById(R.id.titleTextView)
         textViews = arrayOf(
             downstairsTextView,
             joggingTextView,
@@ -61,6 +74,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             upstairsTextView,
             walkingTextView
         )
+
+        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
     }
 
     override fun onDestroy() {
@@ -81,6 +96,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun runModel() {
         val accArray = FloatArray(3 * MODEL_WINDOW)
         accBuffer.forEachIndexed { i, sample ->
@@ -94,6 +110,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // Shows the values:
         var maxIndex = 0
         var maxVal: Float = Float.MIN_VALUE
+        var maxLabel = ""
         mobileNetModel.labelsList.mapIndexed { i, label ->
             val prob = ret.mapWithFloatValue[label]
             textViews[i].text = prob.toString()
@@ -101,15 +118,35 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             if (prob!! > maxVal) {
                 maxIndex = i
                 maxVal = prob
+                maxLabel = label
             }
         }
         textViews[maxIndex].setTextColor(Color.GREEN)
+
+        // Vibrates to indicate GPS on/off:
+        predictionsBuffer.add(maxLabel == "Sitting" || maxLabel == "Standing") // if the user is idle
+        titleTextView.setTextColor(Color.GRAY) // default color
+        if (predictionsBuffer.count() == STOP_FREQ_CHECK) {
+            val stopFraction = predictionsBuffer.count { it }.toDouble() / STOP_FREQ_CHECK
+            if (stopFraction <= STOP_LOWER_THRESHOLD) {
+                titleTextView.setTextColor(Color.GREEN)
+                vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK))
+            } else if (stopFraction >= STOP_UPPER_THRESHOLD) {
+                titleTextView.setTextColor(Color.RED)
+                vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_DOUBLE_CLICK))
+            }
+            predictionsBuffer.clear() // reduces the update frequency
+        }
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER)
             accBuffer.add(event.values.clone())
-        if (accBuffer.count() == MODEL_WINDOW) runModel()
+        if (accBuffer.count() == MODEL_WINDOW) {
+            runModel()
+            accBuffer.clear() // reduces the update frequency
+        }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
