@@ -10,7 +10,6 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.*
 import androidx.annotation.RequiresApi
-import com.google.common.collect.EvictingQueue
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 
@@ -31,9 +30,9 @@ class MainService : Service(), SensorEventListener {
     private var sensor: Sensor? = null
 
     // Accelerometer and predictions buffers:
-    private val accBuffer: EvictingQueue<FloatArray> = EvictingQueue.create(MODEL_WINDOW)
+    private val accBuffer: MutableList<FloatArray> = ArrayList()
     private val STOP_FREQ_CHECK = 3
-    private var predictionsBuffer: EvictingQueue<Boolean> = EvictingQueue.create(STOP_FREQ_CHECK)
+    private var predictionsBuffer: MutableList<Boolean> = ArrayList()
 
     private val STOP_LOWER_THRESHOLD = 0.1
     private val STOP_UPPER_THRESHOLD = 0.5
@@ -128,7 +127,7 @@ class MainService : Service(), SensorEventListener {
                 titleColor = Color.RED
                 vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK))
             }
-            predictionsBuffer.clear() // reduces the update frequency
+            predictionsBuffer.clear() // reduces the update frequency and keeps the list bounded
         }
     }
 
@@ -139,7 +138,7 @@ class MainService : Service(), SensorEventListener {
         if (accBuffer.count() == MODEL_WINDOW) {
             runModel()
             newBatch = true
-            accBuffer.clear() // reduces the update frequency
+            accBuffer.clear() // reduces the update frequency and keeps the list bounded
         }
     }
 
