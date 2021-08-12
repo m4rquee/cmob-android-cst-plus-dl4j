@@ -7,9 +7,9 @@ import android.graphics.Color
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.os.*
 import androidx.annotation.RequiresApi
+import com.cmob.pattern_rec_mobile.agent.PatternRecMind
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 
@@ -24,10 +24,6 @@ class MainService : Service(), SensorEventListener {
     // Calculated from the dataset and used for normalization:
     private val mus = arrayOf(0.6628660249577367f, 7.2556261603547405f, 0.41107842498640323f)
     private val sigmas = arrayOf(6.849043077510763f, 6.746213296062538f, 4.754117645813611f)
-
-    // Sensor objects:
-    private lateinit var sensorManager: SensorManager
-    private var sensor: Sensor? = null
 
     // Accelerometer and predictions buffers:
     private val accBuffer: MutableList<FloatArray> = ArrayList()
@@ -44,6 +40,9 @@ class MainService : Service(), SensorEventListener {
     lateinit var colors: Array<Int>
     var titleColor = Color.GRAY
     var newBatch = false // if the UI should be updated
+
+    // Agent mind:
+    private lateinit var patternRecMind: PatternRecMind<MainService>
 
     companion object {
         var started = false
@@ -68,13 +67,7 @@ class MainService : Service(), SensorEventListener {
         texts = Array(NUM_CLASSES) { "" }
         colors = Array(NUM_CLASSES) { Color.GRAY }
 
-        // Init the accelerometer sensor (20Hz):
-        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also {
-            sensorManager.registerListener(
-                this, it, 50000, 50000
-            )
-        }
+        patternRecMind = PatternRecMind(this)
 
         vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
@@ -85,7 +78,7 @@ class MainService : Service(), SensorEventListener {
     override fun onDestroy() {
         super.onDestroy()
         mobileNetModel.close()
-        sensorManager.unregisterListener(this)
+        patternRecMind.stopMind()
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
