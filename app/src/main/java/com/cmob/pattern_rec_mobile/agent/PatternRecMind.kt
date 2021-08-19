@@ -1,10 +1,9 @@
 package com.cmob.pattern_rec_mobile.agent
 
 import android.app.Service
-import android.hardware.SensorEventListener
 import br.unicamp.cst.core.entities.Mind
 
-class PatternRecMind<T>(context: T) where T : Service, T : SensorEventListener {
+class PatternRecMind<T : Service>(context: T) {
 
     private var mind: Mind
 
@@ -16,6 +15,7 @@ class PatternRecMind<T>(context: T) where T : Service, T : SensorEventListener {
         mind = Mind()
 
         mind.createCodeletGroup("Sensory")
+        mind.createCodeletGroup("Model")
         mind.createCodeletGroup("Motor")
 
         // Sensory codelet:
@@ -24,10 +24,25 @@ class PatternRecMind<T>(context: T) where T : Service, T : SensorEventListener {
         accCodelet.addOutput(accMemoryObject)
         mind.insertCodelet(accCodelet, "Sensory")
 
-        // Sensory Motor:
+        // Model codelet:
+        val predMemoryObject = mind.createMemoryObject("PREDMO")
+        val nnmodelCodelet = NNModelCodelet("NNMODEL", context)
+        nnmodelCodelet.addInput(accMemoryObject)
+        nnmodelCodelet.addOutput(predMemoryObject)
+        mind.insertCodelet(nnmodelCodelet, "Model")
+
+        // Motor codelets:
         val printCodelet = PrintCodelet("Printer")
-        printCodelet.addInput(accMemoryObject)
+        printCodelet.addInput(predMemoryObject)
         mind.insertCodelet(printCodelet, "Motor")
+        val responseCodelet = ResponseCodelet(
+            "Response",
+            nnmodelCodelet.NUM_CLASSES,
+            nnmodelCodelet.labelsList,
+            context
+        )
+        responseCodelet.addInput(predMemoryObject)
+        mind.insertCodelet(responseCodelet, "Motor")
 
         mind.start()
         return mind

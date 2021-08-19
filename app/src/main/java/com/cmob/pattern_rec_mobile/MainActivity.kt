@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity() {
             try {
                 while (!this.isInterrupted) {
                     sleep(REFRESH_RATE)
-                    runOnUiThread {
+                    /*runOnUiThread {
                         if (mBound && mService.newBatch) {
                             textViews.forEachIndexed { i, textView ->
                                 textView.text = mService.texts[i]
@@ -57,7 +57,7 @@ class MainActivity : AppCompatActivity() {
                             }
                             mService.newBatch = false
                         }
-                    }
+                    }*/
                 }
             } catch (e: InterruptedException) {
             }

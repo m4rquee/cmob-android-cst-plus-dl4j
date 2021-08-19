@@ -4,7 +4,7 @@ import br.unicamp.cst.core.entities.Codelet
 
 abstract class SensorCodelet : Codelet() {
 
-    abstract fun getData(): String
+    abstract fun getData(): Any
 
     override fun proc() {
         for (mo in outputs)

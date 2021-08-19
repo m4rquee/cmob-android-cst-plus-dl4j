@@ -4,6 +4,11 @@ import android.util.Log
 import br.unicamp.cst.core.entities.Codelet
 
 class PrintCodelet(name: String) : Codelet() {
+
+    init {
+        setName(name)
+    }
+
     override fun accessMemoryObjects() {
     }
 
@@ -12,10 +17,11 @@ class PrintCodelet(name: String) : Codelet() {
 
     override fun proc() {
         inputs.forEach { mo ->
-            Log.d(
-                "PrintCodelet",
-                mo.i.toString() + " received from " + mo.name + " at " + mo.timestamp
-            )
+            if (mo.i != null)
+                Log.d(
+                    "PrintCodelet",
+                    mo.i.toString() + " received from " + mo.name + " at " + mo.timestamp
+                )
         }
     }
 }
