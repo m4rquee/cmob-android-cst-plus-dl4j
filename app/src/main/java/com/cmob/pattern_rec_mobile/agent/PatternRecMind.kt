@@ -27,9 +27,11 @@ class PatternRecMind<T : Service>(context: T) {
         // Model codelet:
         val predMemoryObject = mind.createMemoryObject("PREDMO")
         val nnmodelCodelet = NNModelCodelet("NNMODEL", context)
+        val dl4jCodelet = DL4JCodelet("DL4J")
         nnmodelCodelet.addInput(accMemoryObject)
         nnmodelCodelet.addOutput(predMemoryObject)
         mind.insertCodelet(nnmodelCodelet, "Model")
+        mind.insertCodelet(dl4jCodelet, "Model")
 
         // Motor codelets:
         val printCodelet = PrintCodelet("Printer")
